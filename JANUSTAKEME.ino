@@ -23,13 +23,6 @@ void setup() {
 
   Serial.println("Initializing GNSS Module...");
 
-  // Configure L89HA to output ONLY GNGGA
-  Serial.println("$PQTXT,W,0");       // Disable all NMEA sentences
-  delay(100);
-  Serial.println("$PQTXT,W,1,GNGGA"); // Enable GNGGA only
-  delay(100);
-
-  Serial.println("GNSS Configured: Only GNGGA enabled");
 }
 
 void loop() {
