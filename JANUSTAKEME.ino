@@ -1,6 +1,3 @@
-// CanSat Flight Software using L89HA GNSS (GNGGA only)
-// TX0/RX0 (Serial) is used for GNSS module
-
 String nmeaSentence = "";
 double latitude = 0, longitude = 0, altitude = 0;
 int hour = 0, minute = 0, second = 0;
