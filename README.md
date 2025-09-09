@@ -51,3 +51,40 @@ Notes
 * The software relies on a valid GNSS fix for accurate altitude and position readings.
 * Only \$GNGGA sentences are parsed to reduce UART traffic and simplify processing.
 * Adjust the payload deployment logic or thresholds according to your mission requirements.
+
+
+
+
+TASK 2
+
+Defines two data trace objects for Plotly plots:
+
+data2D: stores altitude against UTC time seconds (x,y arrays).
+
+data3D: stores latitude, longitude, and altitude arrays for 3D scatter plot.
+
+Initializes two Plotly plots with titles and axis labels on page load.
+
+
+Splits the incoming NMEA line by commas.
+
+Performs a relaxed check to allow partial sentences (minimum 6 fields for lat/lon).
+
+Parses UTC time, latitude, longitude, and altitude from known standard indices.
+
+Uses conversion functions to convert lat/lon formats and UTC time.
+
+Returns an object with numeric utcSeconds, lat, lon, alt and raw UTC string.
+
+Returns null if critical data missing or invalid.
+
+
+Parses $GNGGA sentences, extracts coordinates and timing.
+
+Plots live altitude (vs UTC time) and 3D geographic path.
+
+
+TASK 3
+
+Had to switch operating systems only have a file where components are rearranged no connections .
+So could not complete task :=(
