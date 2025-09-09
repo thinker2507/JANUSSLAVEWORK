@@ -1,6 +1,6 @@
-CanSat GNSS Flight Software
+F20240824H
+TASK 1 
 
-Overview
 This flight software is designed for a CanSat using a Quectel L89HA GNSS module. The software performs the following functions:
 
 * Reads NMEA \$GNGGA sentences from the GNSS module.
