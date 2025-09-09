@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Arduino L89 GNSS Live Plot with Robust Input Parsing</title>
+  <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+  <style>
+    body {
+      text-align: center;
+      font-family: Arial, sans-serif;
+      margin: 0; padding: 0;
+    }
+    #connect {
+      font-size: 18px;
+      padding: 10px 20px;
+      margin: 20px auto;
+      cursor: pointer;
+      display: block;
+    }
+    #status, #elapsedTime, #utcTimeDisplay {
+      font-weight: bold;
+      margin-top: 10px;
+      font-size: 16px;
+    }
+    #plot2D, #plot3D {
+      width: 90%;
+      height: 400px;
+      margin: 20px auto;
+    }
+  </style>
+</head>
+<body>
+  <h1>Arduino L89 GNSS Live Plot with Robust Input Parsing</h1>
+  <button id="connect">Connect to Arduino (L89 GNSS)</button>
+  <div id="status">Not connected</div>
+  <div id="elapsedTime">Elapsed Time: 0 s</div>
+  <div id="utcTimeDisplay">UTC Time: --:--:--</div>
+  <div id="plot2D"></div>
+  <div id="plot3D"></div>
+
+  <script>
+    const data2D = { x: [], y: [], mode: 'lines+markers', name: 'Altitude (m)' };
+    const data3D = {
+      x: [], y: [], z: [],
+      mode: 'lines+markers',
+      type: 'scatter3d',
+      marker: { size: 4, color: 'red' },
+      line: { width: 2, color: 'blue' }
+    };
+
+    Plotly.newPlot('plot2D', [data2D], {
+      title: 'Altitude vs UTC Time',
+      xaxis: { title: 'UTC Time (seconds since midnight)', zeroline: false },
+      yaxis: { title: 'Altitude (m)' }
+    });
+
+    Plotly.newPlot('plot3D', [data3D], {
+      title: 'GNSS Position: Latitude, Longitude, Altitude',
+      scene: {
+        xaxis: { title: 'Latitude (°)' },
+        yaxis: { title: 'Longitude (°)' },
+        zaxis: { title: 'Altitude (m)' }
+      }
+    });
+
+    function convertToDecimal(coord, hemisphere) {
+      if (!coord || coord.length < 4) return NaN;
+      const dotIndex = coord.indexOf('.');
+      if (dotIndex === -1) return NaN;
+      const degLength = dotIndex - 2;
+      const degrees = parseInt(coord.slice(0, degLength), 10);
+      const minutes = parseFloat(coord.slice(degLength));
+      if (isNaN(degrees) || isNaN(minutes)) return NaN;
+      let decimal = degrees + minutes / 60;
+      if (hemisphere === 'S' || hemisphere === 'W') decimal = -decimal;
+      return decimal;
+    }
+
+    function utcTimeToSeconds(utcStr) {
+      if (!utcStr || utcStr.length < 6) return NaN;
+      const hh = parseInt(utcStr.slice(0, 2), 10);
+      const mm = parseInt(utcStr.slice(2, 4), 10);
+      const ss = parseFloat(utcStr.slice(4));
+      if (isNaN(hh) || isNaN(mm) || isNaN(ss)) return NaN;
+      return hh * 3600 + mm * 60 + ss;
+    }
+
+    // Only this input handling logic is changed according to your format.
+    function parseGNGGA(line) {
+      const parts = line.split(',');
+      // Relaxed check: minimum 6 fields for lat/lon, altitude may be missing
+      if (parts.length < 6) {
+        console.warn('Too few parts for GNGGA:', parts);
+        return null;
+      }
+
+      const utcStr = parts[1] || "";
+      const lat = parts[2] && parts[3] ? convertToDecimal(parts[2], parts[3]) : NaN;
+      const lon = parts[4] && parts[5] ? convertToDecimal(parts[4], parts[5]) : NaN;
+      // Altitude might be missing or small, try parts[9] if exists
+      const alt = parts.length > 9 ? parseFloat(parts[9]) : NaN;
+
+      if (isNaN(lat) || isNaN(lon)) {
+        console.warn('Invalid lat/lon in GNGGA:', line);
+        return null;
+      }
+
+      const utcSeconds = utcTimeToSeconds(utcStr);
+
+      if (isNaN(utcSeconds)) {
+        console.warn('Invalid UTC time in GNGGA:', utcStr);
+        return null;
+      }
+
+      return { utcSeconds, lat, lon, alt: isNaN(alt) ? 0 : alt, utcStr };
+    }
+
+    document.getElementById('connect').addEventListener('click', async () => {
+      if (!('serial' in navigator)) {
+        alert('Web Serial API not supported');
+        return;
+      }
+
+      try {
+        const port = await navigator.serial.requestPort();
+        await port.open({ baudRate: 9600 });
+        document.getElementById('status').textContent = 'Connected';
+
+        const decoder = new TextDecoderStream();
+        port.readable.pipeTo(decoder.writable);
+        const reader = decoder.readable.getReader();
+
+        const startTime = Date.now();
+
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) {
+            document.getElementById('status').textContent = 'Disconnected';
+            break;
+          }
+          if (value) {
+            const lines = value.split('\n');
+            lines.forEach(line => {
+              line = line.trim();
+              if (line.startsWith('$GNGGA')) {
+                const data = parseGNGGA(line);
+                if (data) {
+                  document.getElementById('utcTimeDisplay').textContent = 'UTC Time: ' + data.utcStr;
+
+                  const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+                  document.getElementById('elapsedTime').textContent = 'Elapsed Time: ' + elapsed + ' s';
+
+                  data2D.x.push(data.utcSeconds);
+                  data2D.y.push(data.alt);
+                  Plotly.update('plot2D', { x: [data2D.x], y: [data2D.y] });
+
+                  data3D.x.push(data.lat);
+                  data3D.y.push(data.lon);
+                  data3D.z.push(data.alt);
+                  Plotly.update('plot3D', { x: [data3D.x], y: [data3D.y], z: [data3D.z] });
+                }
+              }
+            });
+          }
+        }
+      } catch (err) {
+        document.getElementById('status').textContent = 'Error: ' + err.message;
+        console.error(err);
+      }
+    });
+  </script>
+</body>
+</html>
+
