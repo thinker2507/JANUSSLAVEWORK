@@ -132,37 +132,46 @@
 
         const startTime = Date.now();
 
-        while (true) {
-          const { value, done } = await reader.read();
-          if (done) {
-            document.getElementById('status').textContent = 'Disconnected';
-            break;
-          }
-          if (value) {
-            const lines = value.split('\n');
-            lines.forEach(line => {
-              line = line.trim();
-              if (line.startsWith('$GNGGA')) {
-                const data = parseGNGGA(line);
-                if (data) {
-                  document.getElementById('utcTimeDisplay').textContent = 'UTC Time: ' + data.utcStr;
+        // --- Replace the while(true) block with this buffered version ---
+let buffer = "";   // accumulate partial serial data
 
-                  const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-                  document.getElementById('elapsedTime').textContent = 'Elapsed Time: ' + elapsed + ' s';
+while (true) {
+  const { value, done } = await reader.read();
+  if (done) {
+    document.getElementById('status').textContent = 'Disconnected';
+    break;
+  }
 
-                  data2D.x.push(data.utcSeconds);
-                  data2D.y.push(data.alt);
-                  Plotly.update('plot2D', { x: [data2D.x], y: [data2D.y] });
+  if (value) {
+    buffer += value;                      // add new chunk
+    const lines = buffer.split('\n');     // split by newline
+    buffer = lines.pop();                 // keep last (possibly incomplete) part
 
-                  data3D.x.push(data.lat);
-                  data3D.y.push(data.lon);
-                  data3D.z.push(data.alt);
-                  Plotly.update('plot3D', { x: [data3D.x], y: [data3D.y], z: [data3D.z] });
-                }
-              }
-            });
-          }
+    for (const raw of lines) {
+      const line = raw.trim();
+      console.log("FULL LINE:", JSON.stringify(line));  // <-- debug: shows each complete line
+
+      if (line.startsWith('$GNGGA')) {
+        const data = parseGNGGA(line);
+        if (data) {
+          document.getElementById('utcTimeDisplay').textContent = 'UTC Time: ' + data.utcStr;
+
+          const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+          document.getElementById('elapsedTime').textContent = 'Elapsed Time: ' + elapsed + ' s';
+
+          data2D.x.push(data.utcSeconds);
+          data2D.y.push(data.alt);
+          Plotly.update('plot2D', { x: [data2D.x], y: [data2D.y] });
+
+          data3D.x.push(data.lat);
+          data3D.y.push(data.lon);
+          data3D.z.push(data.alt);
+          Plotly.update('plot3D', { x: [data3D.x], y: [data3D.y], z: [data3D.z] });
         }
+      }
+    }
+  }
+}
       } catch (err) {
         document.getElementById('status').textContent = 'Error: ' + err.message;
         console.error(err);
